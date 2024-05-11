@@ -14,6 +14,7 @@
 #include "ThreadPool.hpp"
 #include "EpollServer.hpp"
 #include <fcntl.h>
+#include "File.hpp"
 const int MAX_EVENTS = 10;
 
 std::string captureAfterKey(const std::string& input) {
@@ -262,8 +263,10 @@ void EpollServer::eventLoop() {
                     continue;
                 }
 
-                // 将新连接的处理任务添加到线程池
-                pool.enqueue(handle_client, client_fd, client_addr, directory);
+                // 使用线程池来处理新的连接
+                pool.enqueue([this, client_fd, client_addr]() {
+                    handle_client(client_fd, client_addr, directory);
+                });
             }
         }
     }
