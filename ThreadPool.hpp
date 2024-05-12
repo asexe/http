@@ -18,6 +18,9 @@ public:
     auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>;
     ~ThreadPool();
+    size_t getThreadCount() const {
+    return workers.size();
+}
 
 private:
     std::vector<std::thread> workers;
@@ -97,8 +100,10 @@ ThreadPool::~ThreadPool()
         stop = true;
     }
     condition.notify_all();
-    for(std::thread &worker: workers)
-        worker.join();
+    for(std::thread &worker: workers){ if (worker.joinable()) {
+            worker.join(); // Ensure all threads have finished their work
+        }
+    }
 }
 
 #endif // THREAD_POOL_HPP

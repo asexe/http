@@ -14,8 +14,11 @@
 #include "ThreadPool.hpp"
 #include "EpollServer.hpp"
 #include <fcntl.h>
-#include "File.hpp"
+#include <sys/sendfile.h>
+//#include "File.hpp"
 const int MAX_EVENTS = 10;
+int server_fd;
+int client_fd;
 
 std::string captureAfterKey(const std::string& input) {
     std::size_t echoPos = input.find("/echo/");
@@ -100,6 +103,7 @@ std::string readFileContent(const std::string& directory, const std::string& fil
         return "";
     }
 }
+
 std::string handlePostRequest(const std::string& request, const std::string& directory) {
     std::string response;
     std::string filename;
@@ -124,7 +128,32 @@ std::string handlePostRequest(const std::string& request, const std::string& dir
             std::ofstream outFile(filePath, std::ios::binary);
             if (outFile) {
                 outFile << fileContent;
-                response = "HTTP/1.1 201 Created\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                outFile.close(); // 确保文件已关闭
+
+                // 使用 sendfile() 来发送文件
+                int fd = open(filePath.c_str(), O_RDONLY);
+                if (fd < 0) {
+                    response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                } else {
+                    struct sockaddr_in client_addr;
+                    socklen_t client_addr_len = sizeof(client_addr);
+                    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+                    if (client_fd < 0) {
+                        response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                    } else {
+                        // 发送文件
+                        off_t offset = 0;
+                        ssize_t sent = sendfile(client_fd, fd, &offset, fileContent.size());
+                        if (sent < 0) {
+                            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                        } else {
+                            response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " 
+                                     + std::to_string(sent) + "\r\n\r\n";
+                        }
+                        close(client_fd);
+                    }
+                    close(fd);
+                }
             } else {
                 response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
             }
@@ -270,6 +299,7 @@ void EpollServer::eventLoop() {
             }
         }
     }
+    close(client_fd);
 }
 
 void EpollServer::start() {
@@ -292,10 +322,10 @@ if (directory.empty()) {
     std::cerr << "Error: No directory specified with --directory flag.\n";
 }
 
-//ThreadPool pool(std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
+ThreadPool pool(std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
 
 // Uncomment this block to pass the first stage
-int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+server_fd = socket(AF_INET, SOCK_STREAM, 0);
 if (server_fd < 0) {
 std::cerr << "Failed to create server socket\n";
 return 1;
@@ -334,7 +364,7 @@ std::cout << "Waiting for a client to connect...\n";
     while (true) {
         struct sockaddr_in client_addr;
         int client_addr_len = sizeof(client_addr);
-        int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
+        client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
         if (client_fd < 0) {
             std::cerr << "Error accepting connection\n";
             continue; // Skip to the next iteration if accept fails
@@ -344,8 +374,7 @@ std::cout << "Waiting for a client to connect...\n";
         //pool.enqueue(handle_client, client_fd, client_addr, directory);
         //std::thread client_thread(handle_client, client_fd, client_addr, directory);
         //client_thread.detach(); // Detach the thread to let it run independently
-        EpollServer server(server_fd, directory, std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
-
+        EpollServer server(server_fd, directory,  pool.getThreadCount());
     // 启动事件循环
     server.start();
     }
