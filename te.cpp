@@ -19,6 +19,8 @@
 const int MAX_EVENTS = 10;
 int server_fd;
 int client_fd;
+// 获取硬件支持的线程数，如果没有，就使用默认值4
+size_t thread_count = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4;
 
 std::string captureAfterKey(const std::string& input) {
     std::size_t echoPos = input.find("/echo/");
@@ -274,6 +276,7 @@ EpollServer::EpollServer(int server_fd, const std::string& directory, size_t thr
 }
 
 EpollServer::~EpollServer() {
+    pool.stop();
     close(epoll_fd);
     close(server_fd);
 }
@@ -299,7 +302,6 @@ void EpollServer::eventLoop() {
             }
         }
     }
-    close(client_fd);
 }
 
 void EpollServer::start() {
@@ -322,7 +324,6 @@ if (directory.empty()) {
     std::cerr << "Error: No directory specified with --directory flag.\n";
 }
 
-ThreadPool pool(std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4);
 
 // Uncomment this block to pass the first stage
 server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -354,11 +355,23 @@ if (listen(server_fd, connection_backlog) != 0) {
 std::cerr << "listen failed\n";
 return 1;
 }
-//
 
+// 输出等待客户端连接的消息
+std::cout << "Waiting for a client to connect...\n";
+
+// 创建EpollServer实例并启动
+EpollServer server(server_fd, directory, thread_count);
+server.start(); // 启动事件循环
+
+// 关闭服务器套接字（服务器正常运行时不会执行到这一步）
+close(server_fd);
+
+return 0;
+
+/*
+size_t thread_count = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4;
 struct sockaddr_in client_addr;
 int client_addr_len = sizeof(client_addr);
-
 std::cout << "Waiting for a client to connect...\n";
 
     while (true) {
@@ -371,16 +384,17 @@ std::cout << "Waiting for a client to connect...\n";
         }
 
         // Create a new thread to handle the client
-        //pool.enqueue(handle_client, client_fd, client_addr, directory);
+        pool.enqueue(handle_client, client_fd, client_addr, directory);
         //std::thread client_thread(handle_client, client_fd, client_addr, directory);
         //client_thread.detach(); // Detach the thread to let it run independently
-        EpollServer server(server_fd, directory,  pool.getThreadCount());
+        //EpollServer server(server_fd, directory, thread_count);
     // 启动事件循环
-    server.start();
+    //server.start();
     }
 
     // Close the server socket when done (not reached in this example)
     close(server_fd);
 
     return 0;
+    */
 }
