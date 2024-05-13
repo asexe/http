@@ -15,10 +15,13 @@
 #include "EpollServer.hpp"
 #include <fcntl.h>
 #include <sys/sendfile.h>
+#include <sys/stat.h>
+#include <ctime>
+#include <dirent.h>
 //#include "File.hpp"
 const int MAX_EVENTS = 10;
 int server_fd;
-int client_fd;
+
 // 获取硬件支持的线程数，如果没有，就使用默认值4
 size_t thread_count = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4;
 
@@ -54,8 +57,7 @@ std::string extractUserAgent(const std::string& request) {
     // 提取 User-Agent 头的值
     return request.substr(userAgentPos + sizeof("User-Agent: ") - 1, endOfLinePos - userAgentPos - sizeof("User-Agent: ") + 1);
 }
-
-
+/*
 int matchPath(const char *keyword[], int keywordSize, const std::string& path) {
     for (int i = 0; i < keywordSize; ++i) {
         if (std::strcmp(keyword[i], path.c_str()) == 0) {
@@ -63,8 +65,8 @@ int matchPath(const char *keyword[], int keywordSize, const std::string& path) {
         }
     }
     return 0; // 没有找到匹配，返回 0
-}
-
+}*/
+/*
 int matchEcho(const std::string& path, const std::vector<std::string>& array) {
     for (const auto& str : array) {
         if (path.find(str) != std::string::npos) {
@@ -73,7 +75,7 @@ int matchEcho(const std::string& path, const std::vector<std::string>& array) {
     }
     return false;
 }
-
+*/
 // 新增函数，用于读取文件内容并返回
 std::string readFileContent(const std::string& filePath) {
     std::ifstream fileStream(filePath, std::ios::binary | std::ios::ate);
@@ -168,12 +170,84 @@ std::string handlePostRequest(const std::string& request, const std::string& dir
 
     return response;
 }
+
+std::string fileName(const std::string& filePath) {
+    size_t found = filePath.find_last_of("/\\");
+    if (found != std::string::npos) {
+        return filePath.substr(found + 1);
+    }
+    return filePath;
+}
+
+// 新增函数，用于获取文件的详细信息
+std::string getFileInfo(const std::string& filePath) {
+    struct stat fileStat;
+    if (stat(filePath.c_str(), &fileStat) == 0) {
+        time_t modTime = fileStat.st_mtime; // 获取文件修改时间
+        struct tm *timeInfo = localtime(&modTime);
+        char timeBuffer[100];
+        strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeInfo);
+
+        std::string size = std::to_string(fileStat.st_size) + " bytes";
+
+        return "{\"name\": \"" + fileName(filePath) + "\", \"size\": \"" + size + "\", \"uploaded\": \"" + std::string(timeBuffer) + "\"}";
+    } else {
+        return "{}";
+    }
+}
+std::string listFiles(const std::string& directory) {
+    std::vector<std::string> files;
+    std::string fileListContent;
+
+    DIR *dir = opendir((directory + "/downloaded").c_str());
+    if (dir != NULL) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            std::string file = ent->d_name;
+            if (file != "." && file != "..") {
+                files.push_back(file);
+            }
+        }
+        closedir(dir);
+    }
+
+    for (const auto& file : files) {
+        std::string fileInfo = getFileInfo((directory + "/downloaded/" + file));
+        fileListContent += fileInfo + ",\n";
+    }
+
+    if (!fileListContent.empty()) {
+        fileListContent.pop_back(); // Remove the last comma and newline
+    }
+
+    return "{\"files\": [\n" + fileListContent + "]}";
+}
+
+void NF(int client_fd) {
+    std::string reportt;
+    struct stat fileStat;
+    int fd = open("404/404.html", O_RDONLY);
+    if (fd == -1) {
+        // handle error
+        return;
+    }
+    fstat(fd, &fileStat);
+    off_t len = fileStat.st_size;
+    reportt = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: " + std::to_string(len) + "\r\n\r\n";
+    // send HTTP header
+    send(client_fd, reportt.c_str(), reportt.length(), 0);
+    // send file content
+    sendfile(client_fd, fd, NULL, len);
+    close(fd);
+    //printf("I am here");
+}
+
 // 新建函数 processRequest 来处理请求
-std::string processRequest(const std::string& request, const std::string& directory, const std::vector<std::string>& keyword) {
+std::string processRequest(const std::string& request, const std::string& directory, const std::vector<std::string>& keyword,int client_fd) {
     std::string report;
     size_t start_pos = request.find(" ");
     size_t end_pos = request.find(" ", start_pos + 1);
-    
+
     if (start_pos != std::string::npos && end_pos != std::string::npos) {
         std::string method = request.substr(0, start_pos);
         std::string path = request.substr(start_pos + 1, end_pos - start_pos - 1);
@@ -182,32 +256,46 @@ std::string processRequest(const std::string& request, const std::string& direct
         // 提取 User-Agent 头的值
         std::string userAgent = extractUserAgent(request);
         
-        if (path == "/") {
-            report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!";
+        if (path == "/" || path == "index" ) {
+            //report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!";
+            //send(client_fd, report.c_str(), report.length(), 0);
+            char report[520]="HTTP/1.1 200 ok\r\n\r\n";
+            int s = send(client_fd,report,strlen(report),0);
+            // 打开并发送HTML文件内容
+            int fd = open("index.html",O_RDONLY);
+            sendfile(client_fd,fd,NULL,2500); // 使用零拷贝发送文件内容
+            close(fd);
         }
         // 处理 /user-agent 请求
         else if (path == "/user-agent") {
-            report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " 
-                     + std::to_string(userAgent.length()) + "\r\n\r\n" + userAgent;
+            report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(userAgent.length()) + "\r\n\r\n" + userAgent;
+                    send(client_fd, report.c_str(), report.length(), 0);
         }
         // 处理 /echo/ 请求
         else if (path.find("/echo/") == 0) {
             std::string responseContent = captureAfterKey(request);
-            report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " 
-                     + std::to_string(responseContent.length()) + "\r\n\r\n" + responseContent;
+            report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(responseContent.length()) + "\r\n\r\n" + responseContent;
+                    send(client_fd, report.c_str(), report.length(), 0);
+        }else if (path == "/list-files") {
+        report = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" + listFiles(directory);
+        send(client_fd, report.c_str(), report.length(), 0);
         }else if (method == "POST") {
         // 确保路径以 "/files/" 开始
         if (path.find("/files/") == 0) {
             report = handlePostRequest(request, directory);
+            send(client_fd, report.c_str(), report.length(), 0);
         } else {
-            report = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+            //report = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+            //send(client_fd, report.c_str(), report.length(), 0);
+            NF(client_fd);
         }
     }
         // 处理其他请求，需要directory参数
         else {
             if (directory.empty()) {
-                report = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                return report;
+                //report = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                //send(client_fd, report.c_str(), report.length(), 0);
+                NF(client_fd);
             }
             
             if (path.find("/files/") == 0) {
@@ -219,18 +307,22 @@ std::string processRequest(const std::string& request, const std::string& direct
                 if (!responseContent.empty()) {
                     report = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " 
                              + std::to_string(responseContent.length()) + "\r\n\r\n" + responseContent;
+                            send(client_fd, report.c_str(), report.length(), 0);
                 } else {
                     report = "HTTP/1.1 404 Not Found\r\n\r\n";
+                    send(client_fd, report.c_str(), report.length(), 0);
                 }
             } else {
                 report = "HTTP/1.1 404 Not Found\r\n\r\n";
+                send(client_fd, report.c_str(), report.length(), 0);
             }
         }
     } else {
         report = "HTTP/1.1 400 Bad Request\r\n\r\n";
+        send(client_fd, report.c_str(), report.length(), 0);
+        return report;
     }
     
-    return report;
 }
 
 void handle_client(int client_fd, struct sockaddr_in client_addr, const std::string& directory) {
@@ -245,10 +337,10 @@ void handle_client(int client_fd, struct sockaddr_in client_addr, const std::str
     }
 
     std::string request(buffer, bytes_received);
-    report = processRequest(request, directory, keyword);
+    report = processRequest(request, directory, keyword, client_fd);
 
     // Send the response to the client
-    send(client_fd, report.c_str(), report.length(), 0);
+    //send(client_fd, report.c_str(), report.length(), 0);
     close(client_fd);
 }
 EpollServer::EpollServer(int server_fd, const std::string& directory, size_t thread_count)

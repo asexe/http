@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>File Upload/Download</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 80%; margin: auto; }
+        h1 { text-align: center; }
+        .upload-form, .download-section { margin: 20px 0; }
+        .button { display: inline-block; margin: 10px; padding: 10px 20px; text-decoration: none; background-color: #008CBA; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .button:hover { background-color: #005f73; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>File Upload/Download Interface</h1>
+        
+        <!-- File Upload Form -->
+        <div class="upload-form">
+            <form id="uploadForm" action="http://localhost:4221/files/" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" required>
+                <input type="submit" value="Upload File" class="button">
+            </form>
+        </div>
+        
+        <!-- File Download Section -->
+        <div class="download-section">
+            <p>Click the button to download a file:</p>
+            <button onclick="downloadFile()" class="button">Download File</button>
+        </div>
+        <div class="file-list">
+            <h2>Downloaded Files:</h2>
+            <ul id="fileList"></ul>
+        </div>
+    </div>
+    <script>
+        // Function to handle file download
+        function downloadFile() {
+            const downloadButton = document.querySelector('.download-section .button');
+            const downloadLink = document.createElement('a');
+            downloadLink.href = 'http://localhost:4221/files/defaultfile'; // Replace 'defaultfile' with your default file name
+            downloadLink.download = 'defaultfile'; // Set the default download file name
+            downloadButton.parentNode.replaceChild(downloadLink, downloadButton);
+            downloadLink.click();
+            downloadButton.parentNode.replaceChild(downloadButton, downloadLink);
+        }
+        function getFileList() {
+        fetch('http://localhost:4221/list-files')
+            .then(response => response.json())
+            .then(data => {
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = ''; // 清空当前列表
+                data.files.forEach(file => {
+                    let listItem = document.createElement('li');
+                    listItem.textContent = file;
+                    fileList.appendChild(listItem);
+                });
+            })
+            .catch(error => console.error('Error fetching file list:', error));
+    }
+        window.onload = getFileList
+    </script>
+</body>
+</html>
