@@ -57,25 +57,7 @@ std::string extractUserAgent(const std::string& request) {
     // 提取 User-Agent 头的值
     return request.substr(userAgentPos + sizeof("User-Agent: ") - 1, endOfLinePos - userAgentPos - sizeof("User-Agent: ") + 1);
 }
-/*
-int matchPath(const char *keyword[], int keywordSize, const std::string& path) {
-    for (int i = 0; i < keywordSize; ++i) {
-        if (std::strcmp(keyword[i], path.c_str()) == 0) {
-            return 1; // 找到匹配，返回 1
-        }
-    }
-    return 0; // 没有找到匹配，返回 0
-}*/
-/*
-int matchEcho(const std::string& path, const std::vector<std::string>& array) {
-    for (const auto& str : array) {
-        if (path.find(str) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
-}
-*/
+
 // 新增函数，用于读取文件内容并返回
 std::string readFileContent(const std::string& filePath) {
     std::ifstream fileStream(filePath, std::ios::binary | std::ios::ate);
@@ -138,18 +120,21 @@ std::string handlePostRequest(const std::string& request, const std::string& dir
                 int fd = open(filePath.c_str(), O_RDONLY);
                 if (fd < 0) {
                     response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                    std::cerr << "fd < 0\n";
                 } else {
                     struct sockaddr_in client_addr;
                     socklen_t client_addr_len = sizeof(client_addr);
                     int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_len);
                     if (client_fd < 0) {
                         response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                        std::cerr << "client_fd < 0\n";
                     } else {
                         // 发送文件
                         off_t offset = 0;
                         ssize_t sent = sendfile(client_fd, fd, &offset, fileContent.size());
                         if (sent < 0) {
                             response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                            std::cerr << "sent < 0\n";
                         } else {
                             response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " 
                                      + std::to_string(sent) + "\r\n\r\n";
@@ -160,6 +145,7 @@ std::string handlePostRequest(const std::string& request, const std::string& dir
                 }
             } else {
                 response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                std::cerr << "There are not out file exist\n";
             }
         } else {
             response = "HTTP/1.1 400 Bad Request: Invalid filename\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
@@ -242,8 +228,92 @@ void NF(int client_fd) {
     //printf("I am here");
 }
 
+// 发送 CSS 文件的函数
+void sendCSS(int client_fd, const std::string& css_path) {
+    std::ifstream css_file(css_path);
+    if (!css_file.is_open()) {
+        // 文件打开失败，发送 404 Not Found 错误
+        std::string response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
+
+    // 获取 CSS 文件的大小
+    struct stat file_stat;
+    stat(css_path.c_str(), &file_stat);
+    off_t len_css = file_stat.st_size;
+
+    // 构造 HTTP 头部
+    std::string header = "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\nContent-Length: " + std::to_string(len_css) + "\r\n\r\n";
+    send(client_fd, header.c_str(), header.length(), 0);
+
+    // 发送 CSS 文件内容
+    char buffer[1024];
+    while (!css_file.eof()) {
+        css_file.read(buffer, sizeof(buffer));
+        send(client_fd, buffer, css_file.gcount(), 0);
+    }
+
+    css_file.close();
+}
+
+// 发送 JavaScript 文件的函数
+void sendJS(int client_fd, const std::string& js_path) {
+    std::ifstream js_file(js_path);
+    if (!js_file.is_open()) {
+        // 文件打开失败，发送 404 Not Found 错误
+        std::string response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
+
+    // 获取 JavaScript 文件的大小
+    struct stat file_stat;
+    stat(js_path.c_str(), &file_stat);
+    off_t len_js = file_stat.st_size;
+
+    // 构造 HTTP 头部
+    std::string header = "HTTP/1.1 200 OK\r\nContent-Type: text/javascript\r\nContent-Length: " + std::to_string(len_js) + "\r\n\r\n";
+    send(client_fd, header.c_str(), header.length(), 0);
+
+    // 发送 JavaScript 文件内容
+    char buffer[1024];
+    while (!js_file.eof()) {
+        js_file.read(buffer, sizeof(buffer));
+        send(client_fd, buffer, js_file.gcount(), 0);
+    }
+
+    js_file.close();
+}
+void sendimg(int client_fd, const std::string& js_path) {
+    std::ifstream js_file(js_path);
+    if (!js_file.is_open()) {
+        // 文件打开失败，发送 404 Not Found 错误
+        std::string response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
+
+    // 获取 img 文件的大小
+    struct stat file_stat;
+    stat(js_path.c_str(), &file_stat);
+    off_t len_js = file_stat.st_size;
+
+    // 构造 HTTP 头部
+    std::string header = "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: " + std::to_string(len_js) + "\r\n\r\n";
+    send(client_fd, header.c_str(), header.length(), 0);
+
+    // 发送 img 文件内容
+    char buffer[1024];
+    while (!js_file.eof()) {
+        js_file.read(buffer, sizeof(buffer));
+        send(client_fd, buffer, js_file.gcount(), 0);
+    }
+
+    js_file.close();
+}
 // 新建函数 processRequest 来处理请求
-std::string processRequest(const std::string& request, const std::string& directory, const std::vector<std::string>& keyword,int client_fd) {
+std::string processRequest(const std::string& request, const std::string& directory/*, const std::vector<std::string>& keyword*/,int client_fd) {
     std::string report;
     size_t start_pos = request.find(" ");
     size_t end_pos = request.find(" ", start_pos + 1);
@@ -256,7 +326,7 @@ std::string processRequest(const std::string& request, const std::string& direct
         // 提取 User-Agent 头的值
         std::string userAgent = extractUserAgent(request);
         
-        if (path == "/" || path == "index" ) {
+        if (path == "/" || path == "/index" ) {
             //report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, World!";
             //send(client_fd, report.c_str(), report.length(), 0);
             char report[520]="HTTP/1.1 200 ok\r\n\r\n";
@@ -270,6 +340,15 @@ std::string processRequest(const std::string& request, const std::string& direct
         else if (path == "/user-agent") {
             report = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(userAgent.length()) + "\r\n\r\n" + userAgent;
                     send(client_fd, report.c_str(), report.length(), 0);
+        }
+        else if (path == "/404.css"){
+            sendCSS(client_fd, "404/404.css");
+        }
+        else if (path == "/404.js"){
+            sendJS(client_fd, "404/404.js");
+        }
+        else if (path == "/img/404.png"){
+            sendimg(client_fd, "404/img/404.png");
         }
         // 处理 /echo/ 请求
         else if (path.find("/echo/") == 0) {
@@ -328,7 +407,7 @@ std::string processRequest(const std::string& request, const std::string& direct
 void handle_client(int client_fd, struct sockaddr_in client_addr, const std::string& directory) {
     char buffer[1024];
     std::string report;
-    std::vector<std::string> keyword = {"/files/", "/echo/", "/index.html", "/user-agent"};
+    /*std::vector<std::string> keyword = {"/files/", "/echo/", "/index.html", "/user-agent"};*/
     int bytes_received = recv(client_fd, buffer, sizeof(buffer), 0);
     if (bytes_received < 0) {
         std::cerr << "Error receiving data from client\n";
@@ -337,7 +416,7 @@ void handle_client(int client_fd, struct sockaddr_in client_addr, const std::str
     }
 
     std::string request(buffer, bytes_received);
-    report = processRequest(request, directory, keyword, client_fd);
+    report = processRequest(request, directory/*, keyword*/, client_fd);
 
     // Send the response to the client
     //send(client_fd, report.c_str(), report.length(), 0);
