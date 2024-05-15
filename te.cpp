@@ -237,7 +237,14 @@ std::string handlePostRequest(const std::string &request, const std::string &dir
                 outFile.close(); // 确保文件已关闭
 
                 // 返回成功响应
-                response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                //response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+                //std::cout << "Send!!!\n" << std::endl;
+                char report[520] = "HTTP/1.1 200 ok\r\n\r\n";
+                int s = send(client_fd, report, strlen(report), 0);
+                // 打开并发送HTML文件内容
+                int fd = open("index.html", O_RDONLY);
+                sendfile(client_fd, fd, NULL, 2500); // 使用零拷贝发送文件内容
+                close(fd);
             }
             else
             {
@@ -584,39 +591,6 @@ std::string processRequest(const std::string &request, const std::string &direct
                 NF(client_fd);
             }
         }
-        // 处理其他请求，需要directory参数
-        /*else {
-            if (directory.empty()) {
-                //report = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                //send(client_fd, report.c_str(), report.length(), 0);
-                NF(client_fd);
-            }
-
-            if (path.find("/files/") == 0) {
-                // 提取文件名
-                std::string filename = path.substr(7); // 去掉 "/files/" 前缀
-                std::string responseContent = readFileContent(directory, filename);
-
-                // 如果文件内容不为空，设置正确的响应类型
-                if (!responseContent.empty()) {
-                    report = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: "
-                             + std::to_string(responseContent.length()) + "\r\n\r\n" + responseContent;
-                            send(client_fd, report.c_str(), report.length(), 0);
-                } else {
-                    report = "HTTP/1.1 404 Not Found\r\n\r\n";
-                    send(client_fd, report.c_str(), report.length(), 0);
-                }
-            } else {
-                report = "HTTP/1.1 404 Not Found\r\n\r\n";
-                send(client_fd, report.c_str(), report.length(), 0);
-            }
-        }
-    } else {
-        report = "HTTP/1.1 400 Bad Request\r\n\r\n";
-        send(client_fd, report.c_str(), report.length(), 0);
-        return report;
-    }
-    */
     }
 }
 

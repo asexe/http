@@ -2,36 +2,54 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>File List</title>
+    <title>File Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 80%; margin: auto; }
+        .file-list { margin-top: 20px; }
+        .file-item { margin-bottom: 10px; }
+        .download-link { cursor: pointer; color: blue; text-decoration: underline; }
+        .upload-form, .download-form { margin-top: 20px; }
+    </style>
 </head>
 <body>
-    <h1>File List</h1>
-    <form action="http://localhost:4221/list-files" method="post">
-        <input type="submit" value="List Files">
-    </form>
-    <div id="fileList"></div>
+    <div class="container">
+        <h1>File Management System</h1>
+        
+        <!-- 文件上传表单 -->
+        <form action="/files/" method="post" enctype="multipart/form-data" class="upload-form">
+            <input type="file" name="file" id="file" required>
+            <input type="submit" value="Upload File">
+        </form>
+
+        <!-- 文件列表 -->
+        <div class="file-list">
+            <h2>File List</h2>
+            <div id="fileList"></div>
+        </div>
+    </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            document.querySelector("form").addEventListener("submit", function(event) {
-                event.preventDefault();
-                fetch("/list-files")
-                    .then(response => response.json())
-                    .then(data => {
-    const fileListElement = document.getElementById("fileList");
-    let fileListHTML = "<ul>";
-    data.forEach(file => {
-        fileListHTML += `<li><a href="/downloaded/${file.name}">${file.name}</a> - ${file.size} - ${file.uploaded}</li>`;
-    });
-    fileListHTML += "</ul>";
-    fileListElement.innerHTML = fileListHTML;
-})
-
-                    .catch(error => {
-                        console.error("Error fetching file list:", error);
+        // 这个函数用于从服务器获取文件列表并展示在页面上
+        function getFileList() {
+            fetch('/list-files')
+                .then(response => response.json())
+                .then(data => {
+                    let fileListElement = document.getElementById('fileList');
+                    fileListElement.innerHTML = '';
+                    let fileListHTML = '<ul>';
+                    data.forEach(file => {
+                        fileListHTML += `<li><a href="/downloaded/${file.name}">${file.name}</a> - Size: ${file.size} - Uploaded: ${file.uploaded}</li>`;
                     });
-            });
-        });
+                    fileListHTML += '</ul>';
+                    fileListElement.innerHTML = fileListHTML;
+                })
+                .catch(error => console.error('Error fetching file list:', error));
+        }
+
+        // 当页面加载时获取文件列表
+        window.onload = getFileList;
+
     </script>
 </body>
 </html>
