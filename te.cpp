@@ -590,6 +590,8 @@ std::string processRequest(const std::string &request, const std::string &direct
                 // send(client_fd, report.c_str(), report.length(), 0);
                 NF(client_fd);
             }
+        }else{
+            NF(client_fd);
         }
     }
 }
