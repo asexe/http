@@ -67,24 +67,6 @@ std::string extractUserAgent(const std::string &request)
     return request.substr(userAgentPos + sizeof("User-Agent: ") - 1, endOfLinePos - userAgentPos - sizeof("User-Agent: ") + 1);
 }
 
-// 新增函数，用于读取文件内容并返回
-std::string readFileContent(const std::string &directory, const std::string &filename)
-{
-    std::ifstream fileStream((directory + "/" + filename).c_str(), std::ios::binary | std::ios::ate);
-    if (fileStream)
-    {
-        std::streamsize size = fileStream.tellg();
-        fileStream.seekg(0, std::ios::beg);
-
-        std::string content((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-        return content;
-    }
-    else
-    {
-        return "";
-    }
-}
-
 /*
 std::string handlePostRequest(const std::string& request, const std::string& directory, int client_fd) {
     std::string response;
