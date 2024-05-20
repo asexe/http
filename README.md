@@ -5,7 +5,6 @@
 注意代码中并没有实现不存在downloaded文件夹程序自动创建的功能，所以在运行代码的过程中，需要用户在对应的文件夹下创建名为downloaded的文件夹作为上传以及下载的目标文件夹。\
 [![pkKWoU1.md.png](https://s21.ax1x.com/2024/05/20/pkKWoU1.md.png)](https://imgse.com/i/pkKWoU1)
 [![pkKWT4x.md.png](https://s21.ax1x.com/2024/05/20/pkKWT4x.md.png)](https://imgse.com/i/pkKWT4x)
-[![pkKWHC6.md.png](https://s21.ax1x.com/2024/05/20/pkKWHC6.md.png)](https://imgse.com/i/pkKWHC6)
 # 关于服务器功能的升级实现
 实现了线程池和epoll的复用。\
 在此基础是实现了管理线程（负责线程数的扩容与缩减）、任务队列（负责向任务队列填装任务）、工作线程（负责从任务队列取任务并处理）。 其中任务队列、工作线程采用生产者-消费者模型。采用互斥量+条件变量实现线程同步。
