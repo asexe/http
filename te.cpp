@@ -67,82 +67,6 @@ std::string extractUserAgent(const std::string &request)
     return request.substr(userAgentPos + sizeof("User-Agent: ") - 1, endOfLinePos - userAgentPos - sizeof("User-Agent: ") + 1);
 }
 
-/*
-std::string handlePostRequest(const std::string& request, const std::string& directory, int client_fd) {
-    std::string response;
-    std::string filename;
-    std::string fileContent;
-
-    // 查找 POST 请求正文的开始
-    size_t postHeaderEnd = request.find("\r\n\r\n") + 4;
-    if (postHeaderEnd != std::string::npos) {
-        // 获取 POST 请求正文内容
-        fileContent = request.substr(postHeaderEnd);
-        std::cout << fileContent  +"\n";
-
-        // 提取文件名，假设它紧跟在 "POST /files/" 之后
-        size_t filenameStart = request.find("POST /files/") + 11;
-        size_t filenameEnd = request.find(" ", filenameStart); // 假设文件名之后有一个空格
-        if (filenameEnd != std::string::npos) {
-            filename = request.substr(filenameStart, filenameEnd - filenameStart);
-            std::cout << filename + "rnm" + "\n";
-
-            // 构造完整的文件路径
-            std::string filePath;
-            if (directory.empty()) {
-                // 如果 directory 为空，则下载文件到 downloaded 文件夹
-                filePath = "downloaded/" + filename;
-            } else {
-                // 否则，上传文件到 uploaded 文件夹
-                filePath = directory + "/" + filename;
-            }
-
-            // 保存文件
-            std::ofstream outFile(filePath, std::ios::binary);
-            if (outFile) {
-                outFile << fileContent;
-                outFile.close(); // 确保文件已关闭
-
-                // 使用 sendfile() 来发送文件
-                int fd = open(filePath.c_str(), O_RDONLY);
-                if (fd < 0) {
-                    response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                    std::cerr << "fd < 0\n";
-                } else {
-                    if (client_fd < 0) {
-                        response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                        std::cerr << "client_fd < 0\n";
-                    } else {
-                        // 发送文件
-                        off_t offset = 0;
-                        struct stat fileStat;
-                        fstat(fd, &fileStat);
-                        ssize_t sent = sendfile(client_fd, fd, &offset, fileStat.st_size);
-                        if (sent < 0) {
-                            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                            std::cerr << "sent < 0\n";
-                        } else {
-                            response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: "
-                                     + std::to_string(sent) + "\r\n\r\n";
-                        }
-                        close(client_fd);
-                    }
-                    close(fd);
-                }
-            } else {
-                response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-                std::cerr << "There are not out files exist\n";
-            }
-        } else {
-            response = "HTTP/1.1 400 Bad Request: Invalid filename\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-        }
-    } else {
-        response = "HTTP/1.1 400 Bad Request: Invalid POST request format\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-    }
-
-    return response;
-}
-*/
 std::string extractFileName(const std::string &postContent)
 {
     // 查找 "filename=\"" 字符串
@@ -163,6 +87,7 @@ std::string extractFileName(const std::string &postContent)
     return "";
 }
 
+//从 HTTP 请求中提取文件名和文件内容，并将文件保存到指定的目录中。
 std::string handlePostRequest(const std::string &request, const std::string &directory, int client_fd)
 {
     std::string response;
@@ -572,7 +497,8 @@ std::string processRequest(const std::string &request, const std::string &direct
                 // send(client_fd, report.c_str(), report.length(), 0);
                 NF(client_fd);
             }
-        }else{
+        }
+        else{
             NF(client_fd);
         }
     }
@@ -746,12 +672,12 @@ int main(int argc, char **argv)
             }
 
             // Create a new thread to handle the client
-            pool.enqueue(handle_client, client_fd, client_addr, directory);
-            //std::thread client_thread(handle_client, client_fd, client_addr, directory);
+            pool.enqueue(handle_client, client_fd, client_addr, directory);//线程池（2）
+            //std::thread client_thread(handle_client, client_fd, client_addr, directory);//新建线程（1）
             //client_thread.detach(); // Detach the thread to let it run independently
-            //EpollServer server(server_fd, directory, thread_count);
+            //EpollServer server(server_fd, directory, thread_count);//epoll线程（3）
         // 启动事件循环
-        //server.start();
+        //server.start();//（3）
         }
 
         // Close the server socket when done (not reached in this example)
